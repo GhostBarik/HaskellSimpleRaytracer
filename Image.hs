@@ -19,7 +19,7 @@ import Codec.Image.DevIL as DEVIL
 type Resolution = (Int, Int)
 
 -- TODO: use unboxed types??
-type Color3f = (Float, Float, Float) -- RGB float format (0..1 for each channel)
+type Color3f = (Double, Double, Double) -- RGB float format (0..1 for each channel)
 type Color3i = (Int, Int, Int) -- RBG integer format (0..255 for each channel)
 
 data Image2Df = Image2Df Resolution [Color3f]
@@ -52,8 +52,8 @@ convertToDevILFormat (Image2Di res pixels) = IA.array ((0,0,0),(h-1,w-1,3)) pack
                                    x     <- [0..w-1],
                                    alpha <- [0..3] :: [Int]]
 
-          flattenImg ((r,g,b):xs) = r:g:b:alpha:(flattenImg xs)
+          flattenImg ((r,g,b):xs) = r:g:b:defaultAlpha:(flattenImg xs)
           flattenImg []           = []
-          alpha                   = 255    
+          defaultAlpha            = 255    
                             
           packed = zip indexes $ map fromIntegral $ flattenImg pixels
