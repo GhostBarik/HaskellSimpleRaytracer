@@ -15,8 +15,6 @@ import Image
 
 import Data.Maybe
 
-import System.IO.Unsafe
-
 import qualified Prelude as P
 import Prelude ((>), otherwise, min, undefined)
 import NumericPrelude.Numeric
@@ -32,15 +30,11 @@ type Scene        = [SceneObject]
 
 
 
---data Material = Material {} 
-
-
 -- Ray is defined by 2 vectors = Origin + Direction
 data Ray = Ray (Vec3D Double) (Vec3D Double) deriving (P.Eq, P.Show)
 
 ----------------------------------
 
--- TODO: Renderable isntead of intersectable??
 class GeometryObject a where 
     intersect :: Ray -> a -> Maybe (Intersection, Normal)
 
@@ -53,37 +47,43 @@ instance GeometryObject Sphere where
     intersect (Ray orig dir) (Sphere rad cPos) = inters d
 
         where dest = orig - cPos
-              b = dest `dot` dir
-              c = dest `dot` dest - rad*rad
-              d = b*b - c
+              b    = dest `dot` dir
+              c    = dest `dot` dest - rad*rad
+              d    = b*b - c
 
-              t1 = -b - (sqrt d)
-              t2 = -b + (sqrt d)
+              t1 = -b - sqrt d
+              t2 = -b + sqrt d
+              t  = min t1 t2
 
               inters disc 
                   | disc > 0.0 = findT
                   | otherwise  = Nothing
-              findT = Just ((min t1 t2), undefined)
 
--- | t1 > 0.0  = Just (t2, (Vec3D 0 1 0))
--- | otherwise = Just (t1, (Vec3D 0 1 0))
+              pointOfInters = orig + (t *> dir)
+              normal = normalize (pointOfInters - cPos) 
+              findT = Just (t, normal)
+
 -----------------------------------
 
 data Polygon = Polygon (Vec3D Double) (Vec3D Double) (Vec3D Double)
 
 instance GeometryObject Polygon where
-    intersect ray obj = undefined -- <- NOT IMPLEMENTED!
+    intersect _ _ = undefined -- <- NOT IMPLEMENTED!
 
+-----------------------------------
+
+-- container for our object
+-- (we use existential types here)
+data SceneObject = forall a. GeometryObject a => SceneObject a CompiledShader
 -----------------------------------
 
 type ShaderFunc     = ([LightSource] -> Material -> Position -> Normal -> Color3f)
 type CompiledShader = (Position -> Normal -> Color3f)
 
-data Material = Material
+data Material = Material { color :: Color3f,     -- surface color
+                           kDiff :: Double,      -- diffuse intensity koefficient
+                           kSpec :: Double,      -- specular instensity
+                           shininess :: Double } -- shininess
 
 -- simple light source for now   -- position -- color --
-data LightSource = LightSource (Vec3D Double) (Color3f)
-
--- container for our object
--- (we use existential types here)
-data SceneObject = forall a. GeometryObject a => SceneObject a CompiledShader 
+data LightSource = LightSource Position Color3f

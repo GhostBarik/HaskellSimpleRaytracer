@@ -10,22 +10,28 @@ import Math
 import Data.Array.Unboxed as U
 import Data.Array.IArray  as IA
 import Codec.Image.DevIL as DEVIL
+import Control.DeepSeq
 
--- render :: resolution -> dist form origin -> [pixel]
-
--- image format
--- [(r,g,b,a)] list => convert to UArray
 
 type Resolution = (Int, Int)
 
 -- TODO: use unboxed types??
 type Color3f = (Double, Double, Double) -- RGB float format (0..1 for each channel)
-type Color3i = (Int, Int, Int) -- RBG integer format (0..255 for each channel)
+type Color3i = (Int, Int, Int)          -- RBG integer format (0..255 for each channel)
 
 data Image2Df = Image2Df Resolution [Color3f]
+
+instance NFData Image2Df where
+  rnf (Image2Df res pixels) = res `deepseq` pixels `deepseq` ()
+
 data Image2Di = Image2Di Resolution [Color3i]
 
+instance NFData Image2Di where
+  rnf (Image2Di res pixels) = res `deepseq` pixels `deepseq` ()
+
 type DevILImage = U.UArray (Int,Int,Int) Word8
+
+
 
 
 -- image2d to Unboxed
@@ -33,12 +39,8 @@ type DevILImage = U.UArray (Int,Int,Int) Word8
 -- convert without checking of resolution
 convertImageUnsafe :: Image2Df -> Image2Di
 convertImageUnsafe (Image2Df res pixels) = Image2Di res (map convertPixel pixels)
-    where convertPixel = mapTuple3 (toInt . cutRange)
-          cutRange f 
-                | f <= 0.0 = 0.0
-                | f >= 1.0 = 1.0
-                | otherwise = f
-          toInt f = round (f * 255.0)
+    where convertPixel = mapTuple3 (toInt . clamp)
+          toInt f      = round (f * 255.0)
 
 -- TODO: convert image in the safe way!
 

@@ -13,38 +13,35 @@ import Scene
 import Data.Function
 import Data.Maybe
 import Control.Monad
+import Data.Time
 
 import Data.List as L hiding (intersect)
 
 import System.Directory
 import Codec.Image.DevIL as DEVIL
 
-import Data.Array.IArray  as IA
+import Prelude hiding ((+),(-),(*),(/), fromIntegral)
+import qualified Prelude as P
+import NumericPrelude.Numeric
+
+import Control.Exception.Base (evaluate)
+import Control.DeepSeq (force)
 
 
 -- (height!, width!) <- right format
 type ScreenSize = (Double, Double) -- size of the scene camera's screen in relative units
 type Distance = Double -- screen offset from the origin of axis
 
-
---data RayGrid = RayGrid -- TODO: implement as array ??? (more safe, bound checking)
-
 data Camera = Camera ScreenSize Distance
 
--- for now use default material
 
--- very simple material (only color without transparency)
--- TODO: should be composed with object???
-data Material = Material Color3f
-
+--data RayGrid = RayGrid -- TODO: implement as array ??? (more safe, bound checking)
 -- TODO (error checking) -> what if user defines resolution like (0,-1)
 -- TODO: draw a proper image, describing the whole ray transformation pipeline
 
-
 -- resolution told us, how many rays to create
-castRays :: Camera -> Resolution -> Scene -> (Image2Df, [Ray])
-castRays (Camera (h,w) dist) res@(xRes,yRes) scene = (pixels, rays)
-
+castRays :: Camera -> Resolution -> Scene -> Image2Df
+castRays (Camera (h,w) dist) res@(xRes,yRes) scene = pixels
     where rayDirs = [normalize $ toRay px py | px <- [0..xResF-1], 
                                                py <- [0..yResF-1]]
 
@@ -60,98 +57,99 @@ castRays (Camera (h,w) dist) res@(xRes,yRes) scene = (pixels, rays)
 
 
 
-
 -- Resolution => resolution of the grid of rays
 computePixels :: Resolution -> [Ray] -> Scene -> Image2Df
 computePixels res rays objects = 
-            Image2Df res (map (computeColor objects) rays)
+              Image2Df res (map (computeColor objects) rays )
+
 
 
 -- compute the color for the single ray
 computeColor :: Scene -> Ray -> Color3f
-computeColor objects r = getColor (findClosest objects r)
+computeColor objects ray@(Ray orig dir) = getColor fromTestRay
     where defaultColor = (0,0,0)
-          getColor c = case c of
-                            (Just (t,_,_)) -> (1,1,1) -- hit! white color only for test purposes!
-                            Nothing -> defaultColor
-                                    
+          fromTestRay  = findClosest objects ray
+          getColor c = 
+            case c of
+                 Just (t, norm, SceneObject _ shader) -> let inter = orig + (t *> dir) 
+                                                         in  shader inter norm
+                 Nothing -> defaultColor
 
---                       1               2                     3
--- generic shader :: (Material) -> ([LightSources]) -> (posistion -> normal) -> Color
- 
--- object <-ONE-> material <-ONE-> shader
--- object knows nothing about light sources in the scene
--- object has material
--- objects has shader
--- shader use material ("compiled shader" remembers its material)
 
--- intersection -> POINT -> shade this point -> Color
+-- this shader just use material color, ignoring any light
+simpleShader :: [LightSource] -> Material -> Position -> Normal -> Color3f
+simpleShader _ mat _ _ = color mat
 
--- object = geometry + (material+shader func = compiled shader!!)
 
+diffuseLightningShader :: [LightSource] -> Material -> Position -> Normal -> Color3f
+diffuseLightningShader lights mat surfPos norm = foldl' addTuple (0,0,0) colorFromLights
+    where colorFromLights = map calcColor lights
+          toLight (LightSource lPos _) = normalize (lPos - surfPos)
+          lnIntensity surfNorm toL     = clamp (toL `dot` surfNorm)
+          finalColor  (r,g,b) intensity = (r * intensity,
+                                           g * intensity,
+                                           b * intensity)
+          calcColor = finalColor (color mat) . lnIntensity norm . toLight
+
+
+
+-- TODO -> draw a complete diagram of the processing
 findClosest :: Scene -> Ray -> Maybe (Intersection, Normal, SceneObject)
 -- alwayse choose the closest intersection point
 findClosest objects r = 
   if (null intersections) then Nothing 
-                          else Just closest
-      -- map fromJust . filter (/= Nothing) $ search (old version, good to compare)
-      where intersections = catMaybes search
-            search  = map (\(SceneObject o _) -> (intersect r o, 0)) objects
-            closest = L.minimumBy (compare `on` fst) intersections
-            fst (a,_,_) = a
+                          else Just (i, norm, obj)
 
+    where intersections = filter ((/= Nothing) . fst) zipped
+          zipped        = zip search objects
+          search        = map (\(SceneObject geom _) -> intersect r geom) objects
+          getT          = fst . fromJust . fst
 
-
-
-
-
-
+          (Just (i,norm), obj) = L.minimumBy (compare `on` getT) intersections
 
 
 
 
 -- global variables -------
-width  = 100 :: Int
-height = 100 :: Int
+width  = 300 :: Int
+height = 300 :: Int
 
---testImage :: Image2Df
---testImage = Image2Df (width, height) 
---                     [mapTuple3 pixFunc (x,y,200) | y <- [0..height-1], 
---                                                    x <- [0..width-1]]
---    where pixFunc p = (fromIntegral p :: Double) / 10.0
---    -- TODO: dont't use literal 400.0 !! unsafe
---    -- better make a choice betwee 2 values
 
---testDevImg1 = convertToDevILFormat . convertImageUnsafe $ testImage
+testMaterial1 = Material (0,1,1) 0 0 0
+testMaterial2 = Material (1,0,0) 0 0 0
 
-testImg2    = ((convertToDevILFormat . convertImageUnsafe $ img), img)
-  where (img, rs) = castRays (Camera (5.0,5.0) 5.0) (height, width)
-                             [SceneObject (Sphere 2.0 (Vec3D 0 0 (-2))) undefined]
-                      
+lightsList = [LightSource (Vec3D 0   10    10)  (  1,  1,  1),
+              LightSource (Vec3D 0 (-10) (-10)) (0.5,0.5,0.5)]
+
+testShader1   = diffuseLightningShader lightsList testMaterial1
+testShader2   = diffuseLightningShader lightsList testMaterial2
+testShader3   = simpleShader lightsList testMaterial2
+
+imageToDevil img = convertToDevILFormat . convertImageUnsafe $ img
+getTestImage = castRays (Camera (5.0,5.0) 5.0) (height, width)
+                    [SceneObject (Sphere 2.0 (Vec3D   0   0 (-2))) testShader1,
+                     SceneObject (Sphere 2.0 (Vec3D 2.0 2.0 (-2))) testShader3]
+
 
 ---------------------------
 
 
-
-                                    
-
-
-
-                                                                          
-
-
-
 main :: IO ()
---main = print 
-
+-- TODO: add time profiling
 main = do
          ilInit -- initialize DevIL library
          let outFile = "test.png"
+         -- create ouput image file
          exist <- doesFileExist outFile
          when exist $ removeFile outFile
-         let (img, rs) = testImg2
-         let Image2Df _ pixels = rs 
-         --mapM print pixels
-         DEVIL.writeImage outFile img
+
+         -- render image
+         start  <- getCurrentTime
+         forced <- evaluate (force getTestImage)
+         stop   <- getCurrentTime
+         
+         -- write to file
+         DEVIL.writeImage outFile (imageToDevil forced)
+         putStrLn $ "Total: " ++ show (diffUTCTime stop start)
 
 

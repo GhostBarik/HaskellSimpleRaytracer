@@ -8,7 +8,7 @@
 -- export all stuff
 module Math where
 
-import qualified NumericPrelude.Numeric
+import qualified NumericPrelude.Numeric()
 import qualified Algebra.Additive
 import qualified Algebra.FloatingPoint
 
@@ -54,24 +54,19 @@ cross (Vec3D x1 y1 z1) (Vec3D x2 y2 z2) = Vec3D x3 y3 z3
 --test2 :: Vec3D Double
 --test2 = (Vec3D 2 2 4) <* (4 :: Double)
 
--- TODO: provide alternative implementations !!!
-
---(|+|) :: (Algebra.FloatingPoint.C a) => Vec3D a -> Vec3D a -> Vec3D a
---(|+|) (Vec3D x1 y1 z1) (Vec3D x2 y2 z2) = Vec3D (x1+x2) (y1+y2) (z1+z2)
-
---(|-|) :: (Algebra.FloatingPoint.C a) => Vec3D a -> Vec3D a -> Vec3D a
---(|-|) (Vec3D x1 y1 z1) (Vec3D x2 y2 z2) = Vec3D (x1-x2) (y1-y2) (z1-z2)
-
---(|.*|) :: (Algebra.FloatingPoint.C a) => a -> Vec3D a -> Vec3D a
---(|.*|) scalar (Vec3D x y z) = Vec3D (scalar*x) (scalar*y) (scalar*z)
-
---(|*.|) :: (Algebra.FloatingPoint.C a) => Vec3D a -> a -> Vec3D a
---(|*.|) v scalar = scalar |.*| v
-
 ---------------------------------------
 
 -- auxiliary functions
 mapTuple3 :: (a -> b) -> (a,a,a) -> (b,b,b)
 mapTuple3  f (x,y,z)= (f x, f y, f z)
+
+addTuple :: (Floating a) => (a,a,a) -> (a,a,a) -> (a,a,a)
+addTuple (a,b,c) (d,e,f) = (a+d,b+e,c+f)
+
+clamp :: (Floating a, Ord a) => a -> a
+clamp value 
+    | value <= 0.0 = 0.0
+    | value >= 1.0 = 1.0
+    | otherwise = value
 
 
