@@ -1,7 +1,0 @@
-
-- mathematical functions (fast???)
-
-- strictness analysis (at the end :) )
-
-
-
