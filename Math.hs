@@ -60,9 +60,6 @@ cross (Vec3D x1 y1 z1) (Vec3D x2 y2 z2) = Vec3D x3 y3 z3
 mapTuple3 :: (a -> b) -> (a,a,a) -> (b,b,b)
 mapTuple3  f (x,y,z)= (f x, f y, f z)
 
-addTuple :: (Floating a) => (a,a,a) -> (a,a,a) -> (a,a,a)
-addTuple (a,b,c) (d,e,f) = (a+d,b+e,c+f)
-
 clamp :: (Floating a, Ord a) => a -> a
 clamp value 
     | value <= 0.0 = 0.0

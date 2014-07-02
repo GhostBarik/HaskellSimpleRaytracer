@@ -15,18 +15,21 @@ import Data.Maybe
 import Control.Monad
 import Data.Time
 
+-- we define out own `intersect` function,
+-- so we need to hide the standard one
 import Data.List as L hiding (intersect)
 
 import System.Directory
 import Codec.Image.DevIL as DEVIL
 
 import Prelude hiding ((+),(-),(*),(/), fromIntegral)
-import qualified Prelude as P
 import NumericPrelude.Numeric
 
 import Control.Exception.Base (evaluate)
 import Control.DeepSeq (force)
 
+-- for testing purposes
+--import System.IO.Unsafe (unsafePerformIO)
 
 -- (height!, width!) <- right format
 type ScreenSize = (Double, Double) -- size of the scene camera's screen in relative units
@@ -63,7 +66,6 @@ computePixels res rays objects =
               Image2Df res (map (computeColor objects) rays )
 
 
-
 -- compute the color for the single ray
 computeColor :: Scene -> Ray -> Color3f
 computeColor objects ray@(Ray orig dir) = getColor fromTestRay
@@ -81,15 +83,36 @@ simpleShader :: [LightSource] -> Material -> Position -> Normal -> Color3f
 simpleShader _ mat _ _ = color mat
 
 
-diffuseLightningShader :: [LightSource] -> Material -> Position -> Normal -> Color3f
-diffuseLightningShader lights mat surfPos norm = foldl' addTuple (0,0,0) colorFromLights
+
+
+diffuseLightningShader1 :: Scene         -- scene objects list
+                        -> [LightSource] -- light sources list
+                        -> Material      -- current material
+                        -> Position      -- surface point position
+                        -> Normal        -- surface normal at given point
+                        -> Color3f       -- returns final computed color
+
+diffuseLightningShader1 objects lights mat surfPos norm = 
+  foldl' (+) (0,0,0) colorFromLights
+  
     where colorFromLights = map calcColor lights
-          toLight (LightSource lPos _) = normalize (lPos - surfPos)
-          lnIntensity surfNorm toL     = clamp (toL `dot` surfNorm)
-          finalColor  (r,g,b) intensity = (r * intensity,
-                                           g * intensity,
-                                           b * intensity)
           calcColor = finalColor (color mat) . lnIntensity norm . toLight
+          toLight (LightSource lPos col) = (normalize (lPos - surfPos), col)
+
+          lnIntensity surfNorm (toL, col) = 
+              case testShadowRay toL of
+                   Just () -> (0.0, col)
+                   Nothing -> (clamp (toL `dot` surfNorm), col)
+
+          testShadowRay tl = 
+            let startShadowRay = Ray startPos tl
+                startPos = surfPos + (norm <* delta)
+                delta = 0.001 :: Double
+            in  findAny objects startShadowRay
+
+          finalColor  (r,g,b) (i, (lR, lG, lB)) = (r * i * lR,
+                                                   g * i * lG,
+                                                   b * i * lB)
 
 
 
@@ -109,33 +132,46 @@ findClosest objects r =
 
 
 
+findAny :: Scene -> Ray -> Maybe ()
+findAny objects r = 
+  if (null intersections) then Nothing 
+                          else Just ()
+    where search = map (\(SceneObject geom _) -> intersect r geom) objects
+          intersections = filter ((>0.0) . fst) . map fromJust . 
+                          filter (/= Nothing) $ search
+
+
+
 
 -- global variables -------
-width  = 300 :: Int
-height = 300 :: Int
+width  = 500 :: Int
+height = 500 :: Int
 
 
 testMaterial1 = Material (0,1,1) 0 0 0
 testMaterial2 = Material (1,0,0) 0 0 0
 
-lightsList = [LightSource (Vec3D 0   10    10)  (  1,  1,  1),
-              LightSource (Vec3D 0 (-10) (-10)) (0.5,0.5,0.5)]
+lightsList = [LightSource (Vec3D 100   100    100)  (  0.8,  0.8,  0.8),
+              LightSource (Vec3D (-100) 100  100) (0.3,0.3,0.3)]
 
-testShader1   = diffuseLightningShader lightsList testMaterial1
-testShader2   = diffuseLightningShader lightsList testMaterial2
+testShader1   = diffuseLightningShader1 testScene lightsList testMaterial1
+testShader2   = diffuseLightningShader1 testScene lightsList testMaterial2
 testShader3   = simpleShader lightsList testMaterial2
 
-imageToDevil img = convertToDevILFormat . convertImageUnsafe $ img
-getTestImage = castRays (Camera (5.0,5.0) 5.0) (height, width)
-                    [SceneObject (Sphere 2.0 (Vec3D   0   0 (-2))) testShader1,
-                     SceneObject (Sphere 2.0 (Vec3D 2.0 2.0 (-2))) testShader3]
+testTriangle1  = makeTriangle (10,-1,1) (-10,-1, 1) (-10,0,-10)
+testTriangle2  = makeTriangle (10,-1,1) (-10,0,-10) (10,0, -10)
 
+testScene = [SceneObject (Sphere 1.6 (Vec3D   0 (-0.1) (-2))) testShader2,
+             SceneObject (Sphere 0.5 (Vec3D 1.7 0.15(-0.4))) testShader1,
+             SceneObject testTriangle1 testShader1,
+             SceneObject testTriangle2 testShader1]
+
+imageToDevil img = convertToDevILFormat . convertImageUnsafe $ img
+getTestImage = castRays (Camera (5.0,5.0) 5.0) (height, width) testScene
 
 ---------------------------
 
-
 main :: IO ()
--- TODO: add time profiling
 main = do
          ilInit -- initialize DevIL library
          let outFile = "test.png"

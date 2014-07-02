@@ -16,7 +16,7 @@ import Image
 import Data.Maybe
 
 import qualified Prelude as P
-import Prelude ((>), otherwise, min, undefined)
+import Prelude ((>), (<), (==), (||), otherwise, min, undefined)
 import NumericPrelude.Numeric
 
 
@@ -65,10 +65,52 @@ instance GeometryObject Sphere where
 
 -----------------------------------
 
-data Polygon = Polygon (Vec3D Double) (Vec3D Double) (Vec3D Double)
+-- TODO: data constructor should be hidden
+data Triangle = Triangle (Vec3D Double) 
+                         (Vec3D Double)
+                         (Vec3D Double)
+                         Normal
 
-instance GeometryObject Polygon where
-    intersect _ _ = undefined -- <- NOT IMPLEMENTED!
+makeTriangle :: (Double, Double, Double) 
+             -> (Double, Double, Double)
+             -> (Double, Double, Double) 
+             -> Triangle
+
+makeTriangle (a1,b1,c1) (a2,b2,c2) (a3,b3,c3) = result
+    where v1 = Vec3D a1 b1 c1
+          v2 = Vec3D a2 b2 c2
+          v3 = Vec3D a3 b3 c3
+          v21 = normalize (v2 - v1)
+          v31 = normalize (v3 - v1)
+          surfNormal = normalize (cross v31 v21)
+          result = Triangle v1 v2 v3 surfNormal
+
+
+instance GeometryObject Triangle where
+    intersect (Ray orig dir) (Triangle v1 v2 v3 norm) = result
+        where e1 = v2 - v1
+              e2 = v3 - v1
+              d  = orig - v1
+
+              s1 = dir `cross` e2
+              s2 = d `cross` e1
+              divisor = s1 `dot` e1
+              invDivisor = 1.0 / divisor
+
+              b1 = (d   `dot` s1) <* invDivisor
+              b2 = (dir `dot` s2) <* invDivisor
+              t  = (e2  `dot` s2) <* invDivisor
+
+              result = if divisor == 0.0 ||
+                          b1 < 0.0 || b1 > 1.0 ||
+                          b2 < 0.0 || (b1 + b2) > 1.0
+                       then
+                          Nothing
+                       else
+                          Just (t, norm)
+
+              
+
 
 -----------------------------------
 
