@@ -14,8 +14,6 @@ import qualified Algebra.FloatingPoint
 
 import Algebra.Module (C, (*>))
 
--- TODO: describe all this shit in details!! :D
-
 -- definition of the simple 3D-vector
 data Vec3D a = Vec3D a a a deriving (Eq, Show)
 
@@ -47,16 +45,8 @@ cross (Vec3D x1 y1 z1) (Vec3D x2 y2 z2) = Vec3D x3 y3 z3
           y3 = z1 * x2 - x1 * z2
           z3 = x1 * y2 - y1 * x2
 
--- TESTS
---test1 :: Vec3D Float
---test1 = (4 :: Float) *> (Vec3D 2 2 4)
+-- AUXILIARY FUNCTIONS
 
---test2 :: Vec3D Double
---test2 = (Vec3D 2 2 4) <* (4 :: Double)
-
----------------------------------------
-
--- auxiliary functions
 mapTuple3 :: (a -> b) -> (a,a,a) -> (b,b,b)
 mapTuple3  f (x,y,z)= (f x, f y, f z)
 
@@ -65,5 +55,3 @@ clamp value
     | value <= 0.0 = 0.0
     | value >= 1.0 = 1.0
     | otherwise = value
-
-
